@@ -37,50 +37,20 @@ namespace jellyfin_ani_sync.Helpers {
             if (providers.ContainsKey("Anidb")) {
                 logger.LogInformation("(Anidb) Anime already has AniDb ID; no need to look it up");
                 if (!int.TryParse(providers["Anidb"], out aniDbId)) return (null, null);
-                var foundAnime = animeListXml.Anime.Where(anime => int.TryParse(anime.Anidbid, out int xmlAniDbId) &&
-                                                                   xmlAniDbId == aniDbId &&
-                                                                   (
-                                                                       (video as Episode).Season.ProviderIds.ContainsKey("Anidb") ||
-                                                                       (int.TryParse(anime.Defaulttvdbseason, out int xmlSeason) &&
-                                                                        xmlSeason == seasonNumber ||
-                                                                        anime.Defaulttvdbseason == "a")
-                                                                   )
-                ).ToList();
-                switch (foundAnime.Count()) {
-                    case 1:
-                        var related = animeListXml.Anime.Where(anime => anime.Tvdbid == foundAnime.First().Tvdbid).ToList();
-                        if (video is Episode episode && episode.Series.Children.OfType<Season>().Count() > 1 && related.Count > 1) {
-                            // contains more than 1 season, need to do a lookup
-                            logger.LogInformation($"(Anidb) Anime {episode.Series.Name} found in anime XML file");
-                            logger.LogInformation($"(Anidb) Looking up anime {episode.Series.Name} in the anime XML file by absolute episode number...");
-                            var aniDb = GetAniDbByEpisodeOffset(logger, GetAbsoluteEpisodeNumber(episode), seasonNumber, related);
-                            if (aniDb != null) {
-                                logger.LogInformation($"(Anidb) Anime {episode.Series.Name} found in anime XML file, detected AniDB ID {aniDb}");
-                                return (aniDb.Value, null);
-                            } else {
-                                logger.LogInformation($"(Anidb) Anime {episode.Series.Name} could not found in anime XML file; falling back to other metadata providers if available...");
-                            }
-                        } else {
-                            if (video is Episode episodeWithMultipleSeasons && episodeWithMultipleSeasons.Season.IndexNumber > 1) {
-                                // user doesnt have full series; have to do season lookup
-                                logger.LogInformation($"(Tvdb) Anime {episodeWithMultipleSeasons.Series.Name} found in anime XML file");
-                                var aniDb = SeasonLookup(logger, seasonNumber, related);
-                                return aniDb != null ? (aniDb, null) : (null, null);
-                            } else {
-                                logger.LogInformation($"(Tvdb) Anime {video.Name} found in anime XML file");
-                                // is movie / only has one season / no related; just return the only result
-                                return int.TryParse(related.First().Anidbid, out aniDbId) ? (aniDbId, null) : (null, null);
-                            }
-                            logger.LogInformation($"(Anidb) Anime {(video is Episode episodeWithoutSeason ? episodeWithoutSeason.Name : video.Name)} found in anime XML file");
-                            // is movie / only has one season / no related; just return the only result
-                            return int.TryParse(foundAnime.First().Anidbid, out aniDbId) ? (aniDbId, null) : (null, null);
-                        }
 
-                        break;
+                var foundAnime = animeListXml.Anime
+                    .Where(anime => int.TryParse(anime.Anidbid, out int xmlAniDbId) && xmlAniDbId == aniDbId)
+                    .ToList();
+
+                switch (foundAnime.Count) {
+                    case 1:
+                        logger.LogInformation($"(Anidb) Anime {((video is Episode episode) ? episode.Series.Name : video.Name)} found in anime XML file");
+                        return (aniDbId, null);
+
                     case > 1:
-                        // here
                         logger.LogWarning("(Anidb) More than one result found; possibly an issue with the XML. Falling back to other metadata providers if available...");
                         break;
+
                     case 0:
                         logger.LogWarning("(Anidb) Anime not found in anime list XML; falling back to other metadata providers if available...");
                         break;
